@@ -1,5 +1,5 @@
 module topowave
 
-greet() = print("Hello World!")
+greet() = print("topowave")
 
 end # module
