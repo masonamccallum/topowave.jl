@@ -31,12 +31,8 @@ gmsh.model.setPhysicalName(2, 6, "My surface")
 
 gmsh.model.mesh.generate(2)
 
-gmsh.write("t1.msh")
+gmsh.write("data/t1.msh")
 gmsh.finalize()
 end
 
 
-using StartUpDG
-
-VXY, EToV = readGmsh2D("data/tri_unstruc_rect.msh");
-rd = RefElemData(Tri(), 2);
