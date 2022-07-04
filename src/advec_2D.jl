@@ -1,4 +1,3 @@
-using OrdinaryDiffEq
 using LinearAlgebra, Plots
 using StartUpDG
 
