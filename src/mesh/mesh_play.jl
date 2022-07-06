@@ -34,5 +34,3 @@ gmsh.model.mesh.generate(2)
 gmsh.write("data/t1.msh")
 gmsh.finalize()
 end
-
-
