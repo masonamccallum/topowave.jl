@@ -1,12 +1,20 @@
 using LinearAlgebra, Plots
 using StartUpDG
+using OrdinaryDiffEq
 
 rd = RefElemData(Quad(), 4);
-md = MeshData(uniform_mesh(Quad(), 16)..., rd);
-md = make_periodic(md);
+md = MeshData(uniform_mesh(Quad(),16)...,rd);
+
+VXY, EToV = readGmsh2D("data/multiDomain.msh");
+rd = RefElemData(Tri(), 3);
+md = MeshData(VXY,EToV,rd);
+mp = MeshPlotter(rd,md)
+plot(mp)
+
+md = make_periodic(md)
 
 @unpack x, y = md;
-u = @. exp(-100 * (x^2 + y^2));
+u = @. exp(-10 * ((x-0.5)^2 + (y-0.5)^2));
 
 # du/dt + du/dx = 0, periodic
 function rhs!(du, u, parameters, t)
@@ -33,19 +41,9 @@ parameters = (; rd, md, uf=similar(md.xf), uP=similar(md.xf), flux_u=similar(md.
 prob = ODEProblem(rhs!, u, tspan, parameters)
 sol = solve(prob, Tsit5(), reltol=1e-7, abstol=1e-7)
 
-#scatter(x, y, zcolor=sol.u[end], leg=false)
-scatter(map(x->vec(rd.Vp*x), (md.xyz..., getindex.(sol.u[end], 1))), 
-         zcolor=vec(rd.Vp*getindex.(sol.u[end], 1)), msw=0, leg=false, cam=(0,0))
-
-@gif for i in 1:148
-    scatter(x,y,zcolor=sol.u[i])
+Nsteps = 400;
+using ProgressBars
+anim1 = @animate for i in ProgressBar(1:Nsteps)
+    plot(x,y,sol.u[i],leg=false)
 end
-
-@gif for i in 1:148
-    scatter(map(x->vec(rd.Vp*x), (md.xyz..., getindex.(sol.u[i], 1))), 
-         zcolor=vec(rd.Vp*getindex.(sol.u[end], 1)), msw=0, leg=false, cam=(0,0))
-end
-
-@gif for i in 1:148
-    plot(x,y,sol.u[i])
-end
+gif(anim1,"./Advect_2D.gif",fps=60)

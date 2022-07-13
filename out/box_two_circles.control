@@ -1,0 +1,44 @@
+\begin{MODEL}
+   \begin{OUTER_BOUNDARY}
+      \begin{END_POINTS_LINE}
+         name = Line
+         xEnd = [30.0,7.5,0.0]
+         xStart = [0.0,7.5,0.0]
+      \end{END_POINTS_LINE}
+      \begin{END_POINTS_LINE}
+         name = Line 1
+         xEnd = [30.0,15.0,0.0]
+         xStart = [30.0,7.5,0.0]
+      \end{END_POINTS_LINE}
+      \begin{END_POINTS_LINE}
+         name = Line 4
+         xEnd = [0.0,15.0,0.0]
+         xStart = [30.0,15.0,0.0]
+      \end{END_POINTS_LINE}
+      \begin{END_POINTS_LINE}
+         name = Line 3
+         xEnd = [0.0,7.5,0.0]
+         xStart = [0.0,15.0,0.0]
+      \end{END_POINTS_LINE}
+   \end{OUTER_BOUNDARY}
+\end{MODEL}
+\begin{CONTROL_INPUT}
+   \begin{SPRING_SMOOTHER}
+      smoothing type = LinearAndCrossbarSpring
+      smoothing = ON
+   \end{SPRING_SMOOTHER}
+   \begin{BACKGROUND_GRID}
+      x0 = [0.0,0.0,0.0]
+      N = [30,15,0]
+      dx = [1.0,1.0,0.0]
+   \end{BACKGROUND_GRID}
+   \begin{RUN_PARAMETERS}
+      mesh file name = out/box_two_circles.inp
+      plot file format = skeleton
+      plot file name = out/box_two_circles.tec
+      stats file name = out/box_two_circles.txt
+      mesh file format = ABAQUS
+      polynomial order = 4
+   \end{RUN_PARAMETERS}
+\end{CONTROL_INPUT}
+\end{FILE}
