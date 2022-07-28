@@ -59,6 +59,3 @@ Physical Surface("top", 16) = {13, 15};
 Physical Surface("bottom", 17) = {12, 14};
 
 Transfinite Curve {15} = 50 Using Bump 1;
-
-Physical Surface("top", 16) += {13, 15};
-Physical Surface("bottom", 17) += {14, 12};
