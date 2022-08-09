@@ -2,7 +2,7 @@ using LinearAlgebra, Plots
 using ProgressBars
 using UnPack
 using StartUpDG
-using OrdinaryDiffEq
+#using OrdinaryDiffEq
 
 #PDE: ħ∂ₜu = -σ₁uₓ-σ₂uᵥ-imσ₃u
 #NOTE:v=y  VS code won't let me type u\_y
@@ -19,7 +19,7 @@ using OrdinaryDiffEq
 #   ∂ₜu = -Dᵣσ₁u -Dₛσ₂u - i*m*σ₃u - M⁻¹∫̂n⋅(σ₁(u*-uᵏ)+σ₂(u*-uᵏ))φₙdΓ
 
 #TODO: intialize wave based on Dispersion Relation
-
+#oban applied functional analysis
 
 #TODO: remove these global vars
 σ₁ = [0 1; 1 0];
@@ -34,17 +34,44 @@ initial(x,y) = reshape([
 
 begin
 import_options = MeshImportOptions(true,true)
-VXY, EToV, grouping = readGmsh2D_v4("data/mesh_no_pert_v4.msh", import_options) 
+file = "/home/mason/Documents/summer2022/topowave.jl/data/mesh_no_pert_v4.msh"
+VXY, EToV, grouping = readGmsh2D_v4(file, import_options) 
 #VXY, EToV, grouping = readGmsh2D_v4("data/pert_mesh_v4.msh", import_options) 
 rd = RefElemData(Tri(), 3);
 md = MeshData(VXY, EToV, rd);
-mp = MeshPlotter(rd, md)
 md = make_periodic(md)
+end
 
-theme(:dracula)
-plot(mp, size=(1000,1000),linecolor="white")
-@unpack x,y = md;
-scatter!(x,y, markersize=3, markerstrokewidth=0)
+
+begin
+ @info "Visualizing reference elements"
+ @unpack r, s, rf, sf, rq, sq, Fmask = rd
+
+ scatter(r, s, color=:blue, size=(800,600), markersize = 5,label="Mesh interior")
+# scatter!(r[Fmask], s[Fmask], color=:red, markersize = 5, label="Mesh exterior")
+# scatter!(rf, sf, color=:green, markersize = 5, label="Face mat")
+# scatter(rq, sq, color=:black, markersize = 5, label="Quad mat")
+# rp and sp are plotting nodes. I think these play nicer with plotting packages
+#scatter!(rd.rp, rd.sp, color=:cyan, markersize = 5, label="equi nodes")
+end
+
+begin
+# rd.Vf = vandermonde(...)/VDM interpolates from nodes to face nodes
+# rd.Vf face quad interp map
+# rd.Vq quad interp map
+#  xf = rd.Vf * xyz
+#  xq = rd.Vq * xyz
+
+@unpack x,y = md; # Compute nodes: (x,y)=ψ(r,s) (equation 6.3 on page 172 of hesthaven)
+@unpack Fmask = rd
+@unpack xf,yf,xq,yq = md # 12 edge nodes and 12 quadrature notes per element
+
+mp = MeshPlotter(rd, md)
+plot(mp, size=(1500,1500),linecolor=:black)
+#scatter!(x,y,markercolor="red",markersize=3,size=(1000,1000),markerstrokewidth=0,leg=false)
+#scatter!(x[Fmask[:],:],y[Fmask[:],:],markercolor="white",markersize=3,size=(1000,1000),markerstrokewidth=0,leg=false)
+#scatter!(xf,yf,markersize=2)
+scatter!(xq,yq,markersize=2)
 end
 
 begin
@@ -60,8 +87,15 @@ end
 Plots.scatter(x, y, real.(u[:,:,1]), leg=false, markersize=0.5)
 end
 
-
 #   ∂ₜu = -Dᵣσ₁u -Dₛσ₂u - i*m*σ₃u - M⁻¹∫̂n⋅(σ₁(u*-uᵏ)+σ₂(u*-uᵏ))φₙdΓ
+#          Dᵣ:(10x10)
+#          σ₁:(2x2)
+#          u₁:(10x1700)
+#         TODO: Equation above missing geometric factors
+#         TODO: understand mesh variety
+#         TODO: add boundary conditions
+#         TODO: add flux term
+
 function rhs!(du, u, parameters, t)
     @unpack rd, md = parameters
     @unpack Vf, Fmask, Dr, Ds, LIFT = rd
@@ -72,41 +106,42 @@ function rhs!(du, u, parameters, t)
     σ₂ = [0 -im; im 0];
     σ₃ = [1 0; 0 -1];
 
-    #mul!(uf, Vf, u)
-    #@. uP = uf[md.mapP]    
-    #@. flux_u = 0.5 * (uP - uf) * nxJ 
+    #Vf: face quad interp map
+    mul!(uf, complex.(Vf), u[:,:,1])
+    @. uP = uf[md.mapP]
+    @. flux_u = 0.5 * (uP - uf) * nxJ
 
     uflat = transpose(reshape(u,size(u,1)*size(u,2),2))
     sig1_u = similar(uflat)
     sig2_u = similar(uflat)
     sig3_u = similar(uflat)
+    dr_sig1_u = similar(u)
+
+    #=
     mul!(sig1_u,σ₁,uflat)
     sig1_u = transpose(sig1_u)
     sig1_u = reshape(sig1_u,size(u,1),size(u,2),size(u,3))
+    dr_sig1_u = reshape([Dr*sig1_u[:,:,1] Dr*sig1_u[:,:,2]],size(u,1),size(u,2),2)
 
+    dr_sig2_u = similar(u)
     mul!(sig2_u,σ₂,uflat)
     sig2_u = transpose(sig2_u)
     sig2_u = reshape(sig2_u,size(u,1),size(u,2),size(u,3))
+    dr_sig2_u = reshape([Dr*sig2_u[:,:,1] Dr*sig2_u[:,:,2]],size(u,1),size(u,2),2)
 
-    Dr_test = reshape([Dr Dr],size(Dr,1),size(Dr,2),2)
-    #ur =  Dr_test * sig1_u
-    #=
-    mul!(us, Ds, sig2_u)
-
-    mul!(sig3_u,σ₃,u)
-    sig3_u = im*sig3_u
-
-    mul!(lifted_flux, LIFT, flux_u)
-    @. dudx = rxJ * ur + sxJ * us - sig3_u
-    @. du = dudx + lifted_flux
-    du ./= -J
+    mul!(sig3_u,σ₃ ,uflat)
+    sig3_u = transpose(sig3_u)
+    sig3_u = reshape(sig3_u,size(u,1),size(u,2),size(u,3))
+    return -dr_sig1_u-dr_sig2_u-im*0.2*sig3_u
     =#
-end;
+end
 
 begin
 tspan = (0.0, 1.0)
-parameters = (; rd, md, uf=similar(md.xf), uP=similar(md.xf), flux_u=similar(md.xf),
-    ur=similar(zeros(size(md.x,1),size(md.x,2),2)), us=similar(md.x), dudx=similar(md.x), lifted_flux=similar(md.x))
+parameters = (; rd, md, uf=similar(md.xf,Complex), uP=similar(md.xf,Complex), flux_u=similar(md.xf,Complex),
+    ur=similar(zeros(size(md.x,1),size(md.x,2),2),Complex), us=similar(md.x,Complex), dudx=similar(md.x,Complex), lifted_flux=similar(md.x,Complex))
 end
-prob = ODEProblem(rhs!, u, tspan, parameters)
-sol = solve(prob, Tsit5(), reltol=1e-7, abstol=1e-7)
+
+rhs!(1,u,parameters,1)
+#prob = ODEProblem(rhs!, u, tspan, parameters)
+#sol = solve(prob, Tsit5(), reltol=1e-7, abstol=1e-7)

@@ -2,17 +2,10 @@ using LinearAlgebra, Plots
 using StartUpDG
 using OrdinaryDiffEq
 
-
 VXY, EToV,grouping = readGmsh2D_v4("data/mesh_no_pert_v4.msh",true);
 #VXY, EToV = readGmsh2D_v4("data/no_group_v4.msh");
 rd = RefElemData(Tri(), 3);
 md = MeshData(VXY, EToV, rd);
-
-rd = RefElemData(Tri(), Polynomial(), 3)
-md = MeshData(uniform_mesh(Tri(), 30)..., rd)
-mp = MeshPlotter(rd, md)
-plot(mp)
-
 md = make_periodic(md)
 
 @unpack x, y = md;

@@ -34,10 +34,11 @@ using SpecialFunctions
         NODETOL::Float64 = 1e-10;
     end
 
-    function Scheme_1D(n) #TODO: Must provide default vals for all member vars need fix
+    function Scheme_1D(n)
         return Scheme_1D(N=n,Np=n+1)
     end
 
+    
     function JacobiGL(alpha,beta,N)
         x = zeros(N+1,1);
         if N==1
@@ -126,11 +127,12 @@ using SpecialFunctions
         return P
     end
 
-    function GradJacobiP(r, alpha, beta, N)
+
     """
         Evaluate the derivative of the Jacobi polynomial 
         at points r for order N
     """
+    function GradJacobiP(r, alpha, beta, N)
         dP = zeros(length(r),1)
         if N!=0
             a = sqrt(N*(N+alpha+beta+1))
@@ -142,15 +144,19 @@ using SpecialFunctions
         return dP
     end
 
-    function Dmatrix1D(N,r,V) #TODO: V matrix error effects this function [break point]
+    """
+        Dᵣ is the operator that transforms point values u'(rᵢ)=Dᵣu(rᵢ)
+    """
+    function Dmatrix1D(N,r,V)
         Vr = GradVandermonde1D(N,r);
-        Dr = Vr/V; # Vr*inv(V)
+        Dr = Vr/V; # Dᵣ = VᵣV⁻¹
     end
 
+    """
+    # Initialize the gradient of the modal basis
+
+    """
     function GradVandermonde1D(N,r)
-        """
-        # Initialize the gradient of the modal basis
-        """
         DVr = zeros(length(r),N+1) 
         for i in 0:N 
         GJ = GradJacobiP(r,0,0,i)

@@ -7,7 +7,7 @@ using SpecialFunctions
 using SparseArrays
 using ProgressBars
 using Parameters
-include("DG.jl")
+include("DG_1D.jl")
 
 #1d solver for maxwells
  rk4a = [            0.0,
@@ -79,10 +79,11 @@ end
 
 mesh = DG.Mesh1D(-1,1,80) #xmin,xmax,numberOfGridNodes
 scheme = DG.Scheme_1D(N=6) #order, mesh
+
 r = DG.JacobiGL(0,0,scheme.N);
 
 V = DG.vandermonde1D(scheme.N,r);
-jr = DG.GradVandermonde1D(scheme.N,r);
+Vr = DG.GradVandermonde1D(scheme.N,r);
 Dr = DG.Dmatrix1D(scheme.N,r,V);
 LIFT = DG.lift1D(V,scheme.Np,mesh.Nfaces,scheme.Nfp);
 
@@ -101,7 +102,7 @@ Fx = x[Fmask[:],:];
 
 # surface normals and inverse metrix at surface
 nx = DG.Normals1D(scheme.Nfp,mesh.Nfaces,mesh.k);
-Fscale = 1 ./J[Fmask[:],:]; #TODO: isinf.(Fscale). getting Inf in Fscale
+Fscale = 1 ./J[Fmask[:],:];
 # Connectivity matrix
 EToE,EToF = DG.connect1D(mesh);  #TODO: package
 # Connectivity maps
