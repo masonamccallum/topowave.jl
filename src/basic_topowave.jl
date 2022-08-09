@@ -19,7 +19,6 @@ using StartUpDG
 #   ∂ₜu = -Dᵣσ₁u -Dₛσ₂u - i*m*σ₃u - M⁻¹∫̂n⋅(σ₁(u*-uᵏ)+σ₂(u*-uᵏ))φₙdΓ
 
 #TODO: intialize wave based on Dispersion Relation
-#oban applied functional analysis
 
 #TODO: remove these global vars
 σ₁ = [0 1; 1 0];
