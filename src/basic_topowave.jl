@@ -2,7 +2,7 @@ using LinearAlgebra, Plots
 using ProgressBars
 using UnPack
 using StartUpDG
-#using OrdinaryDiffEq
+using OrdinaryDiffEq
 
 #PDE: ħ∂ₜu = -σ₁uₓ-σ₂uᵥ-imσ₃u
 #NOTE:v=y  VS code won't let me type u\_y
@@ -18,13 +18,6 @@ using StartUpDG
 #   ∂ₜu = -M⁻¹sᵣσ₁u -M⁻¹Sₛσ₂u - M⁻¹⧆ - M⁻¹∫̂n⋅(σ₁(u*-uᵏ)+σ₂(u*-uᵏ))φₙdΓ
 #   ∂ₜu = -Dᵣσ₁u -Dₛσ₂u - i*m*σ₃u - M⁻¹∫̂n⋅(σ₁(u*-uᵏ)+σ₂(u*-uᵏ))φₙdΓ
 
-#TODO: intialize wave based on Dispersion Relation
-
-#TODO: remove these global vars
-σ₁ = [0 1; 1 0];
-σ₂ = [0 -im; im 0];
-σ₃ = [1 0; 0 -1];
-ħ = 1; 
 
 initial(x,y) = reshape([ 
     ℯ^(-(1/200)*im*((x-50)^2+(y-50)^2))
@@ -86,14 +79,12 @@ end
 Plots.scatter(x, y, real.(u[:,:,1]), leg=false, markersize=0.5)
 end
 
-#   ∂ₜu = -Dᵣσ₁u -Dₛσ₂u - i*m*σ₃u - M⁻¹∫̂n⋅(σ₁(u*-uᵏ)+σ₂(u*-uᵏ))φₙdΓ
-#          Dᵣ:(10x10)
-#          σ₁:(2x2)
-#          u₁:(10x1700)
+#   Jᵏ∂ₜu = -Dᵣσ₁u -Dₛσ₂u - i*m*σ₃u - M⁻¹∫̂n⋅(σ₁(u*-uᵏ)+σ₂(u*-uᵏ))φₙdΓ
 #         TODO: Equation above missing geometric factors
 #         TODO: understand mesh variety
 #         TODO: add boundary conditions
 #         TODO: add flux term
+#         TODO: intialize wave based on Dispersion Relation
 
 function rhs!(du, u, parameters, t)
     @unpack rd, md = parameters
@@ -141,6 +132,5 @@ parameters = (; rd, md, uf=similar(md.xf,Complex), uP=similar(md.xf,Complex), fl
     ur=similar(zeros(size(md.x,1),size(md.x,2),2),Complex), us=similar(md.x,Complex), dudx=similar(md.x,Complex), lifted_flux=similar(md.x,Complex))
 end
 
-rhs!(1,u,parameters,1)
 #prob = ODEProblem(rhs!, u, tspan, parameters)
 #sol = solve(prob, Tsit5(), reltol=1e-7, abstol=1e-7)
