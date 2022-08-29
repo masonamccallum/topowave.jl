@@ -26,7 +26,7 @@ initial(x,y) = reshape([
 
 begin
 import_options = MeshImportOptions(true,true)
-file = "/home/mason/Documents/summer2022/topowave.jl/data/mesh_no_pert_v4.msh"
+file = "data/mesh_no_pert_v4.msh"
 VXY, EToV, grouping = readGmsh2D_v4(file, import_options) 
 #VXY, EToV, grouping = readGmsh2D_v4("data/pert_mesh_v4.msh", import_options) 
 rd = RefElemData(Tri(), 3);
@@ -34,18 +34,6 @@ md = MeshData(VXY, EToV, rd);
 md = make_periodic(md)
 end
 
-
-begin
- @info "Visualizing reference elements"
- @unpack r, s, rf, sf, rq, sq, Fmask = rd
-
- scatter(r, s, color=:blue, size=(800,600), markersize = 5,label="Mesh interior")
-# scatter!(r[Fmask], s[Fmask], color=:red, markersize = 5, label="Mesh exterior")
-# scatter!(rf, sf, color=:green, markersize = 5, label="Face mat")
-# scatter(rq, sq, color=:black, markersize = 5, label="Quad mat")
-# rp and sp are plotting nodes. I think these play nicer with plotting packages
-#scatter!(rd.rp, rd.sp, color=:cyan, markersize = 5, label="equi nodes")
-end
 
 begin
 # rd.Vf = vandermonde(...)/VDM interpolates from nodes to face nodes
@@ -61,9 +49,8 @@ begin
 mp = MeshPlotter(rd, md)
 plot(mp, size=(1500,1500),linecolor=:black)
 #scatter!(x,y,markercolor="red",markersize=3,size=(1000,1000),markerstrokewidth=0,leg=false)
-#scatter!(x[Fmask[:],:],y[Fmask[:],:],markercolor="white",markersize=3,size=(1000,1000),markerstrokewidth=0,leg=false)
+scatter!(x[Fmask[:],:],y[Fmask[:],:],markercolor="white",markersize=3,size=(1000,1000),markerstrokewidth=0,leg=false)
 #scatter!(xf,yf,markersize=2)
-scatter!(xq,yq,markersize=2)
 end
 
 begin
@@ -86,7 +73,8 @@ end
 #         TODO: add flux term
 #         TODO: intialize wave based on Dispersion Relation
 
-function rhs!(du, u, parameters, t)
+    σ₁ = [0 1; 1 0];
+function rhs!(du, u, parameters, t) #TODO: combine terms and optimize memory usage 
     @unpack rd, md = parameters
     @unpack Vf, Fmask, Dr, Ds, LIFT = rd
     @unpack rxJ, sxJ, ryJ, syJ, J, nxJ, nyJ, sJ = md
@@ -100,12 +88,25 @@ function rhs!(du, u, parameters, t)
     mul!(uf, complex.(Vf), u[:,:,1])
     @. uP = uf[md.mapP]
     @. flux_u = 0.5 * (uP - uf) * nxJ
+    lifted_flux = LIFT * flux_u
 
-    uflat = transpose(reshape(u,size(u,1)*size(u,2),2))
-    sig1_u = similar(uflat)
-    sig2_u = similar(uflat)
-    sig3_u = similar(uflat)
-    dr_sig1_u = similar(u)
+    mul!(uf, complex.(Vf), u[:,:,2])
+    @. uP = uf[md.mapP]
+    @. flux_u = 0.5 * (uP - uf) * nxJ
+    lifted_flux = LIFT * flux_u
+    println(size(lifted_flux))
+
+    # u [10*1160*2]
+    uflat = transpose(reshape(u,size(u,1)*size(u,2),2)) # [2*11600]
+    sig1_u = reshape(σ₁ * uflat,size(u,1),size(u,2),2)  # [10*1160*2]
+    sig2_u = reshape(σ₂ * uflat,size(u,1),size(u,2),2)
+    sig3_u = reshape(σ₃ * uflat,size(u,1),size(u,2),2)
+
+    dr_sig1_u1 = -Dr*sig1_u[:,:,1]
+    dr_sig1_u2 = -Dr*sig1_u[:,:,2]
+
+    ds_sig2_u1 = -Ds*sig2_u[:,:,1]
+    ds_sig2_u2 = -Ds*sig2_u[:,:,2]
 
     #=
     mul!(sig1_u,σ₁,uflat)
@@ -130,6 +131,7 @@ begin
 tspan = (0.0, 1.0)
 parameters = (; rd, md, uf=similar(md.xf,Complex), uP=similar(md.xf,Complex), flux_u=similar(md.xf,Complex),
     ur=similar(zeros(size(md.x,1),size(md.x,2),2),Complex), us=similar(md.x,Complex), dudx=similar(md.x,Complex), lifted_flux=similar(md.x,Complex))
+rhs!(0.1,u,parameters,1)
 end
 
 #prob = ODEProblem(rhs!, u, tspan, parameters)
