@@ -73,12 +73,18 @@ function rhs!(du, u, parameters) #TODO: combine terms and optimize memory usage
 
     mul!(uf[:,:,1], complex.(Vf), u[:,:,1])
     @. uP[:,:,1] = uf[:,:,1][md.mapP]
-    @. flux_u[:,:,1] = 0.5 * (uP[:,:,1] - uf[:,:,1]) * nxJ #TODO: FIX THIS
+    @. uP[:,:,2] = uf[:,:,2][md.mapP]
+
+    @. flux_u[:,:,1] =  0.5*(uP[:,:,1] - uf[:,:,1])
+    @. flux_u[:,:,2] =  0.5*(uP[:,:,2] - uf[:,:,2])
 
     mul!(uf[:,:,2], complex.(Vf), u[:,:,2])
-    @. uP[:,:,2] = uf[:,:,2][md.mapP]
-    @. flux_u[:,:,2] = 0.5 * (uP[:,:,2] - uf[:,:,2]) * nxJ #TODO: FIX THIS
-
+    flat_flux_u = transpose(reshape(flux_u,size(flux_u,1)*size(flux_u,2),2))
+    sig1_flux_u = reshape(σ₁ * flat_flux_u,size(flux_u,1),size(flux_u,2),2)  # [10*1160*2]
+    sig2_flux_u = reshape(σ₂ * flat_flux_u,size(flux_u,1),size(flux_u,2),2)
+    @. flux_u = sig1_flux_u + sig2_flux_u
+    @. flux_u[:,:,1] = nxJ*(flux_u[:,:,1])
+    @. flux_u[:,:,2] = nxJ*(flux_u[:,:,2])
 
     lifted_flux[:,:,1] = LIFT * flux_u[:,:,1]
     lifted_flux[:,:,2] = LIFT * flux_u[:,:,2]
