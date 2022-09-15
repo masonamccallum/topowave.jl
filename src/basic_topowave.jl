@@ -34,12 +34,10 @@ md = MeshData(VXY, EToV, rd);
 md = make_periodic(md)
 end
 
-
 begin
 # rd.Vf = vandermonde(...)/VDM interpolates from nodes to face nodes
 # rd.Vf face quad interp map
 # rd.Vq quad interp map
-#  xf = rd.Vf * xyz
 #  xq = rd.Vq * xyz
 
 @unpack x,y = md; # Compute nodes: (x,y)=ψ(r,s) (equation 6.3 on page 172 of hesthaven)
@@ -47,10 +45,9 @@ begin
 @unpack xf,yf,xq,yq = md # 12 edge nodes and 12 quadrature notes per element
 
 mp = MeshPlotter(rd, md)
-plot(mp, size=(1500,1500),linecolor=:black)
-#scatter!(x,y,markercolor="red",markersize=3,size=(1000,1000),markerstrokewidth=0,leg=false)
-scatter!(x[Fmask[:],:],y[Fmask[:],:],markercolor="white",markersize=3,size=(1000,1000),markerstrokewidth=0,leg=false)
-#scatter!(xf,yf,markersize=2)
+plot(mp, size=(3500,3500),linecolor=:black)
+scatter!(x[Fmask[:],:],y[Fmask[:],:],markercolor="black",markersize=3,size=(1000,1000),markerstrokewidth=0,leg=false)
+
 end
 
 
@@ -72,15 +69,19 @@ function rhs!(du, u, parameters) #TODO: combine terms and optimize memory usage
     σ₃ = [1 0; 0 -1];
 
     #Vf: face interp map 12 per element
-    mul!(uf, complex.(Vf), u[:,:,1])
-    @. uP = uf[md.mapP]
-    @. flux_u = 0.5 * (uP - uf) * nxJ
-    lifted_flux[:,:,1] = LIFT * flux_u
+    #   ∫̂n⋅(σ₁(u* -uᵏ)+σ₂(u*-uᵏ))φₙdΓ
 
-    mul!(uf, complex.(Vf), u[:,:,2])
-    @. uP = uf[md.mapP]
-    @. flux_u = 0.5 * (uP - uf) * nxJ
-    lifted_flux[:,:,2] = LIFT * flux_u
+    mul!(uf[:,:,1], complex.(Vf), u[:,:,1])
+    @. uP[:,:,1] = uf[:,:,1][md.mapP]
+    @. flux_u[:,:,1] = 0.5 * (uP[:,:,1] - uf[:,:,1]) * nxJ #TODO: FIX THIS
+
+    mul!(uf[:,:,2], complex.(Vf), u[:,:,2])
+    @. uP[:,:,2] = uf[:,:,2][md.mapP]
+    @. flux_u[:,:,2] = 0.5 * (uP[:,:,2] - uf[:,:,2]) * nxJ #TODO: FIX THIS
+
+
+    lifted_flux[:,:,1] = LIFT * flux_u[:,:,1]
+    lifted_flux[:,:,2] = LIFT * flux_u[:,:,2]
 
     uflat = transpose(reshape(u,size(u,1)*size(u,2),2)) # [2*11600]
     sig1_u = reshape(σ₁ * uflat,size(u,1),size(u,2),2)  # [10*1160*2]
@@ -100,6 +101,7 @@ function rhs!(du, u, parameters) #TODO: combine terms and optimize memory usage
     du ./= -J
     return du
 end
+
 # 610517
 # Test my RHS! using function I know derivative of
 # m2: amd queue gpu node
@@ -117,10 +119,8 @@ tspan = (0.0, 1.0)
     end
 
 
-parameters = (; rd, md, uf=similar(md.xf,Complex), uP=similar(md.xf,Complex), flux_u=similar(md.xf,Complex),
+parameters = (; rd, md, uf=zeros(Complex,12,size(u)[2],2), uP=zeros(Complex,12,size(u)[2],2), flux_u=zeros(Complex,12,size(u)[2],2),
     ur=similar(zeros(size(md.x,1),size(md.x,2),2),Complex),ds_sig2_u=similar(u),dr_sig1_u=similar(u), us=similar(md.x,Complex), dudx=similar(u), lifted_flux=similar(u))
-du = zeros(Complex,size(u))
-#prob = ODEProblem(rhs!, u, tspan, parameters)
 end
 
 function topo2d(u,parameters,FinalTime)
