@@ -17,12 +17,10 @@ using StartUpDG
 #   ∂ₜu = -M⁻¹sᵣσ₁u -M⁻¹Sₛσ₂u - M⁻¹⧆ - M⁻¹∫̂n⋅(σ₁(u*-uᵏ)+σ₂(u*-uᵏ))φₙdΓ
 #   ∂ₜu = -Dᵣσ₁u -Dₛσ₂u - i*m*σ₃u - M⁻¹∫̂n⋅(σ₁(u*-uᵏ)+σ₂(u*-uᵏ))φₙdΓ
 
-
 initial(x,y) = reshape([ 
     ℯ^(-(1/200)*im*((x-50)^2+(y-50)^2))
     ℯ^(-(1/200)*im*((x-50)^2+(y-50)^2))
 ],1,2);
-
 
 begin
 import_options = MeshImportOptions(true,true)
@@ -35,11 +33,6 @@ md = make_periodic(md)
 end
 
 begin
-# rd.Vf = vandermonde(...)/VDM interpolates from nodes to face nodes
-# rd.Vf face quad interp map
-# rd.Vq quad interp map
-#  xq = rd.Vq * xyz
-
 @unpack x,y = md; # Compute nodes: (x,y)=ψ(r,s) (equation 6.3 on page 172 of hesthaven)
 @unpack Fmask = rd
 @unpack xf,yf,xq,yq = md # 12 edge nodes and 12 quadrature notes per element
@@ -47,9 +40,7 @@ begin
 mp = MeshPlotter(rd, md)
 plot(mp, size=(3500,3500),linecolor=:black)
 scatter!(x[Fmask[:],:],y[Fmask[:],:],markercolor="black",markersize=3,size=(1000,1000),markerstrokewidth=0,leg=false)
-
 end
-
 
 
 #   Jᵏ∂ₜu = -Dᵣσ₁u -Dₛσ₂u - i*m*σ₃u - M⁻¹∫̂n⋅(σ₁(u*-uᵏ)+σ₂(u*-uᵏ))φₙdΓ
@@ -68,42 +59,49 @@ function rhs!(du, u, parameters) #TODO: combine terms and optimize memory usage
     σ₂ = [0 -im; im 0];
     σ₃ = [1 0; 0 -1];
 
-    #Vf: face interp map 12 per element
-    #   ∫̂n⋅(σ₁(u* -uᵏ)+σ₂(u*-uᵏ))φₙdΓ
-
+    #   -Jᵏ∂ₜu = Dᵣσ₁u + Dₛσ₂u + i*m*σ₃u + M⁻¹∫̂n⋅(σ₁(u*-uᵏ)+σ₂(u*-uᵏ))φₙdΓ
+    #
+    #   FLUX TERM
+    #   M⁻¹∫̂n⋅(σ₁(uᵏ-u*)+σ₂(uᵏ-u*))φₙdΓ
     mul!(uf[:,:,1], complex.(Vf), u[:,:,1])
+    mul!(uf[:,:,2], complex.(Vf), u[:,:,2])
+
     @. uP[:,:,1] = uf[:,:,1][md.mapP]
     @. uP[:,:,2] = uf[:,:,2][md.mapP]
 
     @. flux_u[:,:,1] =  0.5*(uP[:,:,1] - uf[:,:,1])
     @. flux_u[:,:,2] =  0.5*(uP[:,:,2] - uf[:,:,2])
 
-    mul!(uf[:,:,2], complex.(Vf), u[:,:,2])
+    #@. flux_u[:,:,1] =  0.5*(uP[:,:,1]) + uf[:,:,1]
+    #@. flux_u[:,:,2] =  0.5*(uP[:,:,2]) + uf[:,:,2]
+
     flat_flux_u = transpose(reshape(flux_u,size(flux_u,1)*size(flux_u,2),2))
     sig1_flux_u = reshape(σ₁ * flat_flux_u,size(flux_u,1),size(flux_u,2),2)  # [10*1160*2]
     sig2_flux_u = reshape(σ₂ * flat_flux_u,size(flux_u,1),size(flux_u,2),2)
+
     @. flux_u = sig1_flux_u + sig2_flux_u
-    @. flux_u[:,:,1] = nxJ*(flux_u[:,:,1])
-    @. flux_u[:,:,2] = nxJ*(flux_u[:,:,2])
+    @. flux_u[:,:,1] = nxJ * (flux_u[:,:,1]) + nyJ * (flux_u[:,:,1])
+    @. flux_u[:,:,2] = nxJ * (flux_u[:,:,2]) + nyJ * (flux_u[:,:,2])
 
-    lifted_flux[:,:,1] = LIFT * flux_u[:,:,1]
-    lifted_flux[:,:,2] = LIFT * flux_u[:,:,2]
+    lifted_flux[:,:,1] .= LIFT * flux_u[:,:,1]
+    lifted_flux[:,:,2] .= LIFT * flux_u[:,:,2]
 
+    # dudx
+    # Dᵣσ₁u + Dₛσ₂u + i*m*σ₃u
     uflat = transpose(reshape(u,size(u,1)*size(u,2),2)) # [2*11600]
     sig1_u = reshape(σ₁ * uflat,size(u,1),size(u,2),2)  # [10*1160*2]
     sig2_u = reshape(σ₂ * uflat,size(u,1),size(u,2),2)
     sig3_u = reshape(σ₃ * uflat,size(u,1),size(u,2),2)
 
-    dr_sig1_u[:,:,1] = -Dr*sig1_u[:,:,1]
-    dr_sig1_u[:,:,2] = -Dr*sig1_u[:,:,2]
+    dr_sig1_u[:,:,1] = Dr*sig1_u[:,:,1]
+    dr_sig1_u[:,:,2] = Dr*sig1_u[:,:,2]
 
-    ds_sig2_u[:,:,1] = -Ds*sig2_u[:,:,1]
-    ds_sig2_u[:,:,2] = -Ds*sig2_u[:,:,2]
-
-    @. dudx[:,:,1] = dr_sig1_u[:,:,1] + ds_sig2_u[:,:,1] - im*0.2*sig3_u[:,:,1] 
+    ds_sig2_u[:,:,1] = Ds*sig2_u[:,:,1]
+    ds_sig2_u[:,:,2] = Ds*sig2_u[:,:,2]
+     
     @. dudx[:,:,1] = rxJ * dr_sig1_u[:,:,1] + sxJ * ds_sig2_u[:,:,1] + im*0.2*sig3_u[:,:,1] 
-    @. dudx[:,:,2] = rxJ * ds_sig2_u[:,:,2] + sxJ * ds_sig2_u[:,:,2] + im*0.2*sig3_u[:,:,2] 
-    @. du = dudx + lifted_flux
+    @. dudx[:,:,2] = rxJ * dr_sig1_u[:,:,2] + sxJ * ds_sig2_u[:,:,2] + im*0.2*sig3_u[:,:,2] 
+    @. du = dudx - lifted_flux
     du ./= -J
     return du
 end
@@ -143,6 +141,7 @@ function topo2d(u,parameters,FinalTime)
             
     time=0
     resU = zeros(Complex,size(u)) # Fix
+    du = zeros(Complex,size(u)) # Fix
     xmin = 1.0 
     CFL = 0.05;
     dt=CFL*xmin;
@@ -153,7 +152,7 @@ function topo2d(u,parameters,FinalTime)
             rhsU = rhs!(du,u,parameters);
             resU = rk4a[INTRK]*resU + dt*rhsU;
             u = u+rk4b[INTRK]*resU;
-            Plots.scatter(x, y, real.(u[:,:,1]), leg=false, markersize=0.5)
+            Plots.scatter(x, y, real.(u[:,:,1]), leg=false, markersize=0.5, zlims=(-2,2))
         end
         time = time+dt;
     end
