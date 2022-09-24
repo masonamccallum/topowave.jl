@@ -48,6 +48,35 @@ end
 #         TODO: add boundary conditions
 #         TODO: intialize wave based on Dispersion Relation
 
+
+function multiply_pauli_matrix(σ,u)
+    uflat = transpose(reshape(u,size(u,1)*size(u,2),2)) # [2*11600]
+    sig_u = similar(u)
+    sig_u[:,:,1] = reshape((σ * uflat)[1,:],size(u,1),size(u,2))  # [10*1160*2]
+    sig_u[:,:,2] = reshape((σ * uflat)[2,:],size(u,1),size(u,2))  # [10*1160*2]
+    return sig_u
+end
+
+function drs1u_test(du,u,parameters)
+    @unpack rd, md = parameters
+    @unpack Vf, Fmask, Dr, Ds, LIFT = rd
+    @unpack rxJ, sxJ, ryJ, syJ, J, nxJ, nyJ, sJ = md
+    @unpack uf, uP, flux_u, ur, us, dudx, lifted_flux = parameters
+    @unpack dr_sig1_u, ds_sig2_u = parameters
+
+    σ₁ = [0 1; 1 0];
+    # Dᵣσ₁u
+    sig1_u = multiply_pauli_matrix(σ₁,u)
+
+    dr_sig1_u[:,:,1] = Dr*sig1_u[:,:,1]
+    dr_sig1_u[:,:,2] = Dr*sig1_u[:,:,2]
+    @. dudx[:,:,1] = rxJ * dr_sig1_u[:,:,1]
+    @. dudx[:,:,2] = rxJ * dr_sig1_u[:,:,2]
+    @. du = dudx
+    du ./= -J
+    return du
+end
+
 function rhs!(du, u, parameters) #TODO: combine terms and optimize memory usage 
     @unpack rd, md = parameters
     @unpack Vf, Fmask, Dr, Ds, LIFT = rd
@@ -75,9 +104,8 @@ function rhs!(du, u, parameters) #TODO: combine terms and optimize memory usage
     #@. flux_u[:,:,1] =  0.5*(uP[:,:,1]) + uf[:,:,1]
     #@. flux_u[:,:,2] =  0.5*(uP[:,:,2]) + uf[:,:,2]
 
-    flat_flux_u = transpose(reshape(flux_u,size(flux_u,1)*size(flux_u,2),2))
-    sig1_flux_u = reshape(σ₁ * flat_flux_u,size(flux_u,1),size(flux_u,2),2)  # [10*1160*2]
-    sig2_flux_u = reshape(σ₂ * flat_flux_u,size(flux_u,1),size(flux_u,2),2)
+    sig1_flux_u = multiply_pauli_matrix(σ₁,flux_u)
+    sig2_flux_u = multiply_pauli_matrix(σ₂,flux_u)
 
     @. flux_u = sig1_flux_u + sig2_flux_u
     @. flux_u[:,:,1] = nxJ * (flux_u[:,:,1]) + nyJ * (flux_u[:,:,1])
@@ -88,10 +116,9 @@ function rhs!(du, u, parameters) #TODO: combine terms and optimize memory usage
 
     # dudx
     # Dᵣσ₁u + Dₛσ₂u + i*m*σ₃u
-    uflat = transpose(reshape(u,size(u,1)*size(u,2),2)) # [2*11600]
-    sig1_u = reshape(σ₁ * uflat,size(u,1),size(u,2),2)  # [10*1160*2]
-    sig2_u = reshape(σ₂ * uflat,size(u,1),size(u,2),2)
-    sig3_u = reshape(σ₃ * uflat,size(u,1),size(u,2),2)
+    sig1_u = multiply_pauli_matrix(σ₁,u)
+    sig2_u = multiply_pauli_matrix(σ₂,u)
+    sig3_u = multiply_pauli_matrix(σ₃,u)
 
     dr_sig1_u[:,:,1] = Dr*sig1_u[:,:,1]
     dr_sig1_u[:,:,2] = Dr*sig1_u[:,:,2]
@@ -99,8 +126,8 @@ function rhs!(du, u, parameters) #TODO: combine terms and optimize memory usage
     ds_sig2_u[:,:,1] = Ds*sig2_u[:,:,1]
     ds_sig2_u[:,:,2] = Ds*sig2_u[:,:,2]
      
-    @. dudx[:,:,1] = rxJ * dr_sig1_u[:,:,1] + sxJ * ds_sig2_u[:,:,1] + im*0.2*sig3_u[:,:,1] 
-    @. dudx[:,:,2] = rxJ * dr_sig1_u[:,:,2] + sxJ * ds_sig2_u[:,:,2] + im*0.2*sig3_u[:,:,2] 
+    @. dudx[:,:,1] = rxJ * dr_sig1_u[:,:,1] + sxJ * ds_sig2_u[:,:,1] + im*0.5*sig3_u[:,:,1] 
+    @. dudx[:,:,2] = rxJ * dr_sig1_u[:,:,2] + sxJ * ds_sig2_u[:,:,2] + im*0.5*sig3_u[:,:,2] 
     @. du = dudx - lifted_flux
     du ./= -J
     return du
