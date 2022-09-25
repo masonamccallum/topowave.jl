@@ -9,7 +9,13 @@ md = MeshData(VXY, EToV, rd);
 md = make_periodic(md)
 
 @unpack x, y = md;
+@unpack mapB,xf,yf = md;
 u = @. exp(-10 * ((x+0.5)^2 + y^2));
+
+begin
+    scatter(xf[mapB],yf[mapB],markersize=5,leg=false,size=(1000,1000))
+    scatter!(xf,yf,markersize=1)
+end
 
 # du/dt + du/dx = 0, periodic
 function rhs!(du, u, parameters, t)
