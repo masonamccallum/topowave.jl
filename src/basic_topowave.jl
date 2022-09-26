@@ -70,13 +70,10 @@ function dss2u_test(du,u,parameters)
     @unpack dr_sig1_u, ds_sig2_u = parameters
 
     σ₂ = [0 -im; im 0];
-    # Dᵣσ₁u
     sig2_u = multiply_pauli_matrix(σ₂,u)
 
-    ds_sig2_u[:,:,1] = Ds*sig2_u[:,:,1]
-    ds_sig2_u[:,:,2] = Ds*sig2_u[:,:,2]
-    @. dudx[:,:,1] = rxJ * ds_sig2_u[:,:,1]
-    @. dudx[:,:,2] = rxJ * ds_sig2_u[:,:,2]
+    dudx[:,:,1] = ryJ.*(Ds*sig2_u[:,:,1]) + syJ.*(Ds*sig2_u[:,:,1])
+    dudx[:,:,2] = ryJ.*(Ds*sig2_u[:,:,2]) + syJ.*(Ds*sig2_u[:,:,2])
     @. du = dudx
     du ./= -J
     return du
@@ -90,18 +87,18 @@ function drs1u_test(du,u,parameters)
     @unpack dr_sig1_u, ds_sig2_u = parameters
 
     σ₁ = [0 1; 1 0];
-    # Dᵣσ₁u
     sig1_u = multiply_pauli_matrix(σ₁,u)
 
-    dr_sig1_u[:,:,1] = Dr*sig1_u[:,:,1]
-    dr_sig1_u[:,:,2] = Dr*sig1_u[:,:,2]
-    @. dudx[:,:,1] = rxJ * dr_sig1_u[:,:,1]
-    @. dudx[:,:,2] = rxJ * dr_sig1_u[:,:,2]
+    dudx[:,:,1]  = rxJ.*(Dr*sig1_u[:,:,1]) + sxJ.*(Ds*sig1_u[:,:,1])
+    dudx[:,:,2]  = rxJ.*(Dr*sig1_u[:,:,2]) + sxJ.*(Ds*sig1_u[:,:,2])
+
     @. du = dudx
     du ./= -J
     return du
 end
 
+#   -∂ₜu = σ₁uₓ + σ₂uᵥ + i*m*σ₃u 
+#   -Jᵏ∂ₜu = Dᵣσ₁u + Dₛσ₂u + i*m*σ₃u + M⁻¹∫̂n⋅(σ₁(u*-uᵏ)+σ₂(u*-uᵏ))φₙdΓ
 function rhs!(du, u, parameters) #TODO: combine terms and optimize memory usage 
     @unpack rd, md = parameters
     @unpack Vf, Fmask, Dr, Ds, LIFT = rd
@@ -116,18 +113,15 @@ function rhs!(du, u, parameters) #TODO: combine terms and optimize memory usage
     #   -Jᵏ∂ₜu = Dᵣσ₁u + Dₛσ₂u + i*m*σ₃u + M⁻¹∫̂n⋅(σ₁(u*-uᵏ)+σ₂(u*-uᵏ))φₙdΓ
     #
     #   FLUX TERM
-    #   M⁻¹∫̂n⋅(σ₁(uᵏ-u*)+σ₂(uᵏ-u*))φₙdΓ
+    #   M⁻¹∫̂n⋅φₙ(σ₁(uᵏ-u*)+σ₂(uᵏ-u*))dΓ
     mul!(uf[:,:,1], complex.(Vf), u[:,:,1])
     mul!(uf[:,:,2], complex.(Vf), u[:,:,2])
 
     @. uP[:,:,1] = uf[:,:,1][md.mapP]
     @. uP[:,:,2] = uf[:,:,2][md.mapP]
     
-    #@. flux_u[:,:,1] =  uP[:,:,1][md.mapM] + 0.5*(uf[:,:,1][md.mapM] - uP[:,:,1])
-    #@. flux_u[:,:,2] =  uP[:,:,2][md.mapM] + 0.5*(uf[:,:,2][md.mapM] - uP[:,:,2])
-
-    @. flux_u[:,:,1] =  0.5*(uf[:,:,1][md.mapM] - uP[:,:,1])
-    @. flux_u[:,:,2] =  0.5*(uf[:,:,2][md.mapM] - uP[:,:,2])
+    @. flux_u[:,:,1] =  0.5*(uP[:,:,1] - uf[:,:,1][md.mapM] )
+    @. flux_u[:,:,2] = 0.5*(uP[:,:,2] - uf[:,:,2][md.mapM] )
 
     sig1_flux_u = multiply_pauli_matrix(σ₁,flux_u)
     sig2_flux_u = multiply_pauli_matrix(σ₂,flux_u)
@@ -139,22 +133,22 @@ function rhs!(du, u, parameters) #TODO: combine terms and optimize memory usage
     lifted_flux[:,:,1] .= LIFT * flux_u[:,:,1]
     lifted_flux[:,:,2] .= LIFT * flux_u[:,:,2]
 
-    # dudx
-    # Dᵣσ₁u + Dₛσ₂u + i*m*σ₃u
+    # rₓDᵣσ₁u + sₓDₛσ₁u + rᵥDᵣσ₂u + sᵥDₛσ₂u + i*m*σ₃u
     sig1_u = multiply_pauli_matrix(σ₁,u)
     sig2_u = multiply_pauli_matrix(σ₂,u)
     sig3_u = multiply_pauli_matrix(σ₃,u)
+   
+    dudx[:,:,1]  = rxJ.*(Dr*sig1_u[:,:,1]) + sxJ.*(Ds*sig1_u[:,:,1])
+    dudx[:,:,2]  = rxJ.*(Dr*sig1_u[:,:,2]) + sxJ.*(Ds*sig1_u[:,:,2])
 
-    dr_sig1_u[:,:,1] = Dr*sig1_u[:,:,1]
-    dr_sig1_u[:,:,2] = Dr*sig1_u[:,:,2]
+    dudx[:,:,1] += ryJ.*(Ds*sig2_u[:,:,1]) + syJ.*(Ds*sig2_u[:,:,1])
+    dudx[:,:,2] += ryJ.*(Ds*sig2_u[:,:,2]) + syJ.*(Ds*sig2_u[:,:,2])
 
-    ds_sig2_u[:,:,1] = Ds*sig2_u[:,:,1]
-    ds_sig2_u[:,:,2] = Ds*sig2_u[:,:,2]
-     
-    @. dudx[:,:,1] = rxJ * dr_sig1_u[:,:,1] + sxJ * ds_sig2_u[:,:,1] + im*0.5*sig3_u[:,:,1] 
-    @. dudx[:,:,2] = rxJ * dr_sig1_u[:,:,2] + sxJ * ds_sig2_u[:,:,2] + im*0.5*sig3_u[:,:,2] 
-    @. du = dudx - lifted_flux
-    du ./= -J
+    dudx[:,:,1] += im*0.5*sig3_u[:,:,1] 
+    dudx[:,:,2] += im*0.5*sig3_u[:,:,2] 
+
+    @. du = -dudx + lifted_flux
+    du ./= J
     return du
 end
 
@@ -173,8 +167,8 @@ function topo2d(u,parameters,FinalTime)
             2277821191437.0/14882151754819.0];
             
     time=0
-    resU = zeros(Complex,size(u)) # Fix
-    du = zeros(Complex,size(u)) # Fix
+    resU = zeros(Complex,size(u))
+    du = zeros(Complex,size(u))
     xmin = 1 
     CFL = 0.05;
     dt=CFL*xmin;
@@ -185,7 +179,7 @@ function topo2d(u,parameters,FinalTime)
         rhsU = rhs!(du,u,parameters);
         resU = rk4a[INTRK]*resU + dt*rhsU;
         u = u+rk4b[INTRK]*resU;
-        Plots.scatter(x, y, real.(u[:,:,1]), leg=false, markersize=0.5, zlims=(0,10))
+        Plots.scatter(x, y, real.(u[:,:,1]), leg=false, markersize=0.5, zlims=(0,1))
     end
     time = time+dt;
     end
