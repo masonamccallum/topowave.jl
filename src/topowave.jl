@@ -5,4 +5,5 @@ module topowave
  export initial
  export drs1u_test
  export dss2u_test
+ export view_boundary
 end
